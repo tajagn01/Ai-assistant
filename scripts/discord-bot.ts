@@ -2,6 +2,7 @@ import { getDiscordClient, discordConfig } from "@/app/lib/discord/client";
 import { registerCommands } from "@/app/lib/discord/commands";
 import { formatPlanEmbed } from "@/app/lib/discord/embeds";
 import { generateDailyPlan } from "@/app/lib/planner/generator";
+import http from "http";
 
 async function main() {
   const { token } = discordConfig;
@@ -10,6 +11,16 @@ async function main() {
     console.error("DISCORD_BOT_TOKEN environment variable is not defined.");
     process.exit(1);
   }
+
+  // Start a dummy HTTP server to bind to $PORT. 
+  // This passes the health check for free cloud hosting platforms like Render or Koyeb.
+  const port = process.env.PORT || 3000;
+  http.createServer((req, res) => {
+    res.writeHead(200, { "Content-Type": "text/plain" });
+    res.end("Discord Bot is online!");
+  }).listen(port, () => {
+    console.log(`Dummy health check server listening on port ${port}`);
+  });
 
   // 1. Automatically register slash commands at startup
   try {
