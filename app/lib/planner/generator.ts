@@ -142,10 +142,9 @@ export async function generateDailyPlan(
     console.warn("Tasks/ folder not found, empty, or failed to recursively list.");
   }
 
-  // Filter unfinished tasks that are scheduled/due for today, or have high priority (active focus)
-  const unfinishedTasks = allTasks.filter((t) => {
+  // Get all active tasks, filtering out completed tasks and boilerplate template items
+  const activeBacklogTasks = allTasks.filter((t) => {
     if (t.completed) return false;
-    if (t.blocked && !t.dueDate) return false; // Ignore blocked unless explicitly due today
 
     // Exclude boilerplate placeholder tasks from the template
     const lowerTitle = t.title.toLowerCase();
@@ -159,17 +158,14 @@ export async function generateDailyPlan(
       return false;
     }
 
-    // Check if it's explicitly scheduled/due today
-    if (t.dueDate === targetDate) {
-      return true;
-    }
+    return true;
+  });
 
-    // Include if high priority
-    if (t.priority === "high") {
-      return true;
-    }
-
-    // Otherwise, exclude backlog and general recurring items from today's plan
+  // Filter tasks for the deterministic fallback planner (due today or high priority)
+  const todayTasksDeterministic = activeBacklogTasks.filter((t) => {
+    if (t.blocked && !t.dueDate) return false;
+    if (t.dueDate === targetDate) return true;
+    if (t.priority === "high") return true;
     return false;
   });
 
@@ -185,7 +181,7 @@ export async function generateDailyPlan(
       console.log("Trying to plan with Gemini API...");
       markdown = await generatePlanWithAI(
         targetDate,
-        unfinishedTasks,
+        activeBacklogTasks,
         unfinishedWeeklyGoals,
         monthlyGoals
       );
@@ -196,7 +192,7 @@ export async function generateDailyPlan(
           console.log("Falling back to OpenRouter API...");
           markdown = await generatePlanWithOpenRouter(
             targetDate,
-            unfinishedTasks,
+            activeBacklogTasks,
             unfinishedWeeklyGoals,
             monthlyGoals
           );
@@ -204,14 +200,14 @@ export async function generateDailyPlan(
           console.error("OpenRouter API call failed:", openRouterError);
           markdown = generatePlanDeterministic(
             targetDate,
-            unfinishedTasks,
+            todayTasksDeterministic,
             unfinishedWeeklyGoals
           );
         }
       } else {
         markdown = generatePlanDeterministic(
           targetDate,
-          unfinishedTasks,
+          todayTasksDeterministic,
           unfinishedWeeklyGoals
         );
       }
@@ -221,7 +217,7 @@ export async function generateDailyPlan(
       console.log("Gemini Key not set. Trying to plan with OpenRouter API...");
       markdown = await generatePlanWithOpenRouter(
         targetDate,
-        unfinishedTasks,
+        activeBacklogTasks,
         unfinishedWeeklyGoals,
         monthlyGoals
       );
@@ -229,14 +225,14 @@ export async function generateDailyPlan(
       console.error("OpenRouter API call failed:", openRouterError);
       markdown = generatePlanDeterministic(
         targetDate,
-        unfinishedTasks,
+        todayTasksDeterministic,
         unfinishedWeeklyGoals
       );
     }
   } else {
     markdown = generatePlanDeterministic(
       targetDate,
-      unfinishedTasks,
+      todayTasksDeterministic,
       unfinishedWeeklyGoals
     );
   }
@@ -249,11 +245,13 @@ export async function generateDailyPlan(
     `docs(daily): automatic daily plan generation for ${targetDate}`
   );
 
+  const scheduledTasks = parseTasks(markdown, filePath);
+
   return {
     date: targetDate,
     weeklyGoals,
     monthlyGoals,
-    tasks: unfinishedTasks,
+    tasks: scheduledTasks,
     markdown,
   };
 }
@@ -366,7 +364,7 @@ ai_metadata:
 
 ## 📈 AI Scheduled Tasks
 <!-- AI_SCHEDULED_TASKS_START -->
-[Include tasks here ordered by priority. Maintain their priority flag like [priority::high] and their task id like [id::task-id] - e.g. - [ ] Practice DSA [priority::high] [id::leetcode-dsa-today]]
+[Include tasks selected from the unfinished backlog list that are relevant to the weekly goals. Keep it extremely simple as a checklist - e.g. - [ ] Practice DSA on Leetcode]
 <!-- AI_SCHEDULED_TASKS_END -->
 
 ## 📝 Captured Notes & Logs
@@ -474,7 +472,7 @@ ai_metadata:
 
 ## 📈 AI Scheduled Tasks
 <!-- AI_SCHEDULED_TASKS_START -->
-[Include tasks here ordered by priority. Maintain their priority flag like [priority::high] and their task id like [id::task-id] - e.g. - [ ] Practice DSA [priority::high] [id::leetcode-dsa-today]]
+[Include tasks selected from the unfinished backlog list that are relevant to the weekly goals. Keep it extremely simple as a checklist - e.g. - [ ] Practice DSA on Leetcode]
 <!-- AI_SCHEDULED_TASKS_END -->
 
 ## 📝 Captured Notes & Logs
