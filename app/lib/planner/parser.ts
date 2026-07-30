@@ -116,7 +116,7 @@ export function parseTasks(markdown: string, sourceFile: string): TaskItem[] {
       tags.forEach((tag) => {
         title = title.replace(`#${tag}`, "");
       });
-      title = title.replace(/\[\w+::[^\]]+\]/g, "");
+      title = title.replace(/\[[^\]]+\]/g, "");
       title = title.replace(/<!--.*?-->/g, "");
       title = title.replace(/\s+/g, " ").trim();
 
@@ -257,7 +257,7 @@ export function parseDailyPlanMarkdown(
       tags.forEach((tag) => {
         title = title.replace(`#${tag}`, "");
       });
-      title = title.replace(/\[\w+::[^\]]+\]/g, "");
+      title = title.replace(/\[[^\]]+\]/g, "");
       title = title.replace(/<!--.*?-->/g, "");
       title = title.replace(/\s+/g, " ").trim();
 

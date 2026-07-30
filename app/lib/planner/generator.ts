@@ -153,6 +153,8 @@ export async function generateDailyPlan(
       lowerTitle.includes("backlog item") ||
       lowerTitle.includes("blocked task") ||
       lowerTitle.includes("finished task") ||
+      lowerTitle.includes("weekly check-in") ||
+      lowerTitle.includes("weekly checkin") ||
       lowerTitle.match(/^task \d+$/)
     ) {
       return false;
@@ -422,12 +424,7 @@ ${
 ${
   tasks.length > 0
     ? tasks
-        .map(
-          (t) =>
-            `- ${t.title} [Priority: ${t.priority || "none"}] [Source: ${
-              t.sourceFile
-            }] [ID: ${t.id}]`
-        )
+        .map((t) => `- ${t.title} (Priority: ${t.priority || "normal"})`)
         .join("\n")
     : "None"
 }
@@ -540,12 +537,7 @@ ${
 ${
   tasks.length > 0
     ? tasks
-        .map(
-          (t) =>
-            `- ${t.title} [Priority: ${t.priority || "none"}] [Source: ${
-              t.sourceFile
-            }] [ID: ${t.id}]`
-        )
+        .map((t) => `- ${t.title} (Priority: ${t.priority || "normal"})`)
         .join("\n")
     : "None"
 }
