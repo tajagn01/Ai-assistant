@@ -30,12 +30,21 @@ async function fetchAllMarkdownFiles(path: string): Promise<string[]> {
 }
 
 /**
- * Formats a Date object as YYYY-MM-DD using local time zone.
+ * Formats a Date object as YYYY-MM-DD in IST (Asia/Kolkata) timezone.
  */
 export function getLocalDateString(date: Date = new Date()): string {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
+  const formatter = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  
+  const parts = formatter.formatToParts(date);
+  const year = parts.find((p) => p.type === "year")?.value;
+  const month = parts.find((p) => p.type === "month")?.value;
+  const day = parts.find((p) => p.type === "day")?.value;
+  
   return `${year}-${month}-${day}`;
 }
 
