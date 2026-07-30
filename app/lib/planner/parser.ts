@@ -111,12 +111,13 @@ export function parseTasks(markdown: string, sourceFile: string): TaskItem[] {
       const blocked = rawText.includes("blocked_by::");
       const recurring = rawText.includes("recurring::");
 
-      // Clean title removes tags and metadata brackets like [key::value]
+      // Clean title removes tags, metadata brackets, and HTML comments
       let title = rawText;
       tags.forEach((tag) => {
         title = title.replace(`#${tag}`, "");
       });
       title = title.replace(/\[\w+::[^\]]+\]/g, "");
+      title = title.replace(/<!--.*?-->/g, "");
       title = title.replace(/\s+/g, " ").trim();
 
       tasks.push({
@@ -250,13 +251,14 @@ export function parseDailyPlanMarkdown(
       const statusChar = taskMatch[1];
       const rawText = taskMatch[2];
 
-      // Clean title removes tags and metadata brackets like [key::value]
+      // Clean title removes tags, metadata brackets, and HTML comments
       let title = rawText;
       const tags = extractTags(rawText);
       tags.forEach((tag) => {
         title = title.replace(`#${tag}`, "");
       });
       title = title.replace(/\[\w+::[^\]]+\]/g, "");
+      title = title.replace(/<!--.*?-->/g, "");
       title = title.replace(/\s+/g, " ").trim();
 
       if (currentSection.includes("focus")) {
