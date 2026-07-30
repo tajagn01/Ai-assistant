@@ -352,6 +352,13 @@ async function generatePlanWithAI(
   const prompt = `You are a senior productivity coach and scheduler. Generate today's daily log markdown for date ${date} (${dayOfWeek}).
 Today is ${dayOfWeek}. The weekly goals must be completed by Sunday. 
 Intelligently divide and distribute the remaining weekly goals and backlog tasks into today's focus and tasks, so that the user makes steady, daily progress and completes everything by the end of the week.
+
+CRITICAL RULES TO PREVENT DUPLICATION:
+1. Do NOT duplicate items between the "Daily Focus" and "AI Scheduled Tasks" sections.
+2. If a weekly goal (e.g., "5 leetcode" or "2 small project in react") already has a corresponding backlog task in the "Unfinished Tasks" list below (e.g., "Practice DSA on Leetcode" or "Update and push projects on GitHub"), you MUST ONLY list/schedule the backlog task under "AI Scheduled Tasks". Do NOT create a separate checklist item (like "Solve 2 LeetCode problems" or "Advance React project") under "Daily Focus".
+3. Under "Daily Focus", ONLY list daily goals or targets that do NOT have a matching backlog task in the "Unfinished Tasks" list (e.g. if you have a weekly goal of "1 motion video" or "update profile on the fiverr" but NO task for it in the task backlog, synthesize it under "Daily Focus").
+4. For the scheduled backlog tasks under "AI Scheduled Tasks", keep their titles exactly as they are in the task list, but you may append the divided target details in parentheses (e.g., "- [ ] Practice DSA on Leetcode (Solve 2 problems)").
+
 You MUST generate markdown matching the following template structure EXACTLY. Fill in the specific items inside the comment blocks, but keep all frontmatter, headers, and comments intact:
 
 ---
@@ -463,6 +470,13 @@ async function generatePlanWithOpenRouter(
   const prompt = `You are a senior productivity coach and scheduler. Generate today's daily log markdown for date ${date} (${dayOfWeek}).
 Today is ${dayOfWeek}. The weekly goals must be completed by Sunday. 
 Intelligently divide and distribute the remaining weekly goals and backlog tasks into today's focus and tasks, so that the user makes steady, daily progress and completes everything by the end of the week.
+
+CRITICAL RULES TO PREVENT DUPLICATION:
+1. Do NOT duplicate items between the "Daily Focus" and "AI Scheduled Tasks" sections.
+2. If a weekly goal (e.g., "5 leetcode" or "2 small project in react") already has a corresponding backlog task in the "Unfinished Tasks" list below (e.g., "Practice DSA on Leetcode" or "Update and push projects on GitHub"), you MUST ONLY list/schedule the backlog task under "AI Scheduled Tasks". Do NOT create a separate checklist item (like "Solve 2 LeetCode problems" or "Advance React project") under "Daily Focus".
+3. Under "Daily Focus", ONLY list daily goals or targets that do NOT have a matching backlog task in the "Unfinished Tasks" list (e.g. if you have a weekly goal of "1 motion video" or "update profile on the fiverr" but NO task for it in the task backlog, synthesize it under "Daily Focus").
+4. For the scheduled backlog tasks under "AI Scheduled Tasks", keep their titles exactly as they are in the task list, but you may append the divided target details in parentheses (e.g., "- [ ] Practice DSA on Leetcode (Solve 2 problems)").
+
 You MUST generate markdown matching the following template structure EXACTLY. Fill in the specific items inside the comment blocks, but keep all frontmatter, headers, and comments intact:
 
 ---
