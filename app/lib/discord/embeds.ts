@@ -12,44 +12,37 @@ export function formatPlanEmbed(plan: DailyPlan): EmbedBuilder {
     .setTimestamp();
 
   // 1. Focus / Weekly Goals Section
-  if (plan.dailyFocus && plan.dailyFocus.length > 0) {
+  const unfinishedWeeklyGoals = plan.weeklyGoals.filter((g) => !g.completed);
+  if (unfinishedWeeklyGoals.length > 0) {
     embed.addFields({
-      name: "🎯 Today's Focus",
-      value: plan.dailyFocus.map((g) => `• ${g}`).join("\n"),
+      name: "🎯 Focus / Weekly Goals",
+      value: unfinishedWeeklyGoals.map((g) => `• ${g.title}`).join("\n"),
       inline: false,
     });
-  } else {
-    const unfinishedWeeklyGoals = plan.weeklyGoals.filter((g) => !g.completed);
-    if (unfinishedWeeklyGoals.length > 0) {
-      embed.addFields({
-        name: "🎯 Focus / Weekly Goals",
-        value: unfinishedWeeklyGoals.map((g) => `• ${g.title}`).join("\n"),
-        inline: false,
-      });
-    }
   }
 
-  // 2. Today's Tasks Section (Unified simple list)
+  // 2. Today's Tasks Section (Unified simple list of focus items and backlog tasks)
   const activeTasks = plan.tasks.filter((t) => !t.completed);
+  const focusItems = plan.dailyFocus || [];
 
-  if (activeTasks.length === 0) {
+  if (activeTasks.length === 0 && focusItems.length === 0) {
     embed.setDescription("🎉 No tasks scheduled for today!");
   } else {
-    const tasksList = activeTasks
-      .map((task) => {
-        const priorityIndicator =
-          task.priority === "high"
-            ? " 🔥"
-            : task.priority === "medium"
-            ? " ⚡"
-            : "";
-        return `• ${task.title}${priorityIndicator}`;
-      })
-      .join("\n");
+    const focusList = focusItems.map((item) => `• ${item}`);
+    const tasksList = activeTasks.map((task) => {
+      const priorityIndicator =
+        task.priority === "high"
+          ? " 🔥"
+          : task.priority === "medium"
+          ? " ⚡"
+          : "";
+      return `• ${task.title}${priorityIndicator}`;
+    });
+    const unifiedList = [...focusList, ...tasksList].join("\n");
 
     embed.addFields({
       name: "📋 Today's Tasks",
-      value: tasksList,
+      value: unifiedList,
       inline: false,
     });
   }
