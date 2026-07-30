@@ -12,13 +12,21 @@ export function formatPlanEmbed(plan: DailyPlan): EmbedBuilder {
     .setTimestamp();
 
   // 1. Focus / Weekly Goals Section
-  const unfinishedWeeklyGoals = plan.weeklyGoals.filter((g) => !g.completed);
-  if (unfinishedWeeklyGoals.length > 0) {
+  if (plan.dailyFocus && plan.dailyFocus.length > 0) {
     embed.addFields({
-      name: "🎯 Focus / Weekly Goals",
-      value: unfinishedWeeklyGoals.map((g) => `• ${g.title}`).join("\n"),
+      name: "🎯 Today's Focus",
+      value: plan.dailyFocus.map((g) => `• ${g}`).join("\n"),
       inline: false,
     });
+  } else {
+    const unfinishedWeeklyGoals = plan.weeklyGoals.filter((g) => !g.completed);
+    if (unfinishedWeeklyGoals.length > 0) {
+      embed.addFields({
+        name: "🎯 Focus / Weekly Goals",
+        value: unfinishedWeeklyGoals.map((g) => `• ${g.title}`).join("\n"),
+        inline: false,
+      });
+    }
   }
 
   // 2. Today's Tasks Section (Unified simple list)

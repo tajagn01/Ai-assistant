@@ -217,3 +217,72 @@ export function parseGoals(
 
   return goals;
 }
+
+export interface ParsedDailyPlan {
+  dailyFocus: string[];
+  tasks: TaskItem[];
+}
+
+/**
+ * Parses the generated daily plan markdown, separating focus items and scheduled tasks.
+ */
+export function parseDailyPlanMarkdown(
+  markdown: string,
+  sourceFile: string
+): ParsedDailyPlan {
+  const lines = markdown.split(/\r?\n/);
+  const dailyFocus: string[] = [];
+  const tasks: TaskItem[] = [];
+
+  let currentSection = "";
+  const headerRegex = /^#+\s+(.+)$/;
+  const taskRegex = /^\s*[-*+]\s+\[([ xX/])\]\s+(.+)$/;
+
+  lines.forEach((line, index) => {
+    const headerMatch = line.match(headerRegex);
+    if (headerMatch) {
+      currentSection = headerMatch[1].toLowerCase();
+      return;
+    }
+
+    const taskMatch = line.match(taskRegex);
+    if (taskMatch) {
+      const statusChar = taskMatch[1];
+      const rawText = taskMatch[2];
+
+      // Clean title removes tags and metadata brackets like [key::value]
+      let title = rawText;
+      const tags = extractTags(rawText);
+      tags.forEach((tag) => {
+        title = title.replace(`#${tag}`, "");
+      });
+      title = title.replace(/\[\w+::[^\]]+\]/g, "");
+      title = title.replace(/\s+/g, " ").trim();
+
+      if (currentSection.includes("focus")) {
+        dailyFocus.push(title);
+      } else if (currentSection.includes("task")) {
+        const priority = extractPriority(rawText, tags);
+        const dueMatch = rawText.match(/\[due::([\d-]+)\]/);
+        const dueDate = dueMatch ? dueMatch[1] : undefined;
+        const blocked = rawText.includes("blocked_by::");
+        const recurring = rawText.includes("recurring::");
+
+        tasks.push({
+          id: `${sourceFile}-${index}`,
+          title,
+          completed: statusChar.toLowerCase() === "x",
+          priority,
+          tags,
+          sourceFile,
+          rawLine: line,
+          dueDate,
+          blocked,
+          recurring,
+        });
+      }
+    }
+  });
+
+  return { dailyFocus, tasks };
+}

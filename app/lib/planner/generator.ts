@@ -1,7 +1,7 @@
 import { listFolder } from "@/app/lib/github/list";
 import { readFile } from "@/app/lib/github/read";
 import { createOrUpdateFile } from "@/app/lib/github/write";
-import { parseGoals, parseTasks } from "./parser";
+import { parseGoals, parseTasks, parseDailyPlanMarkdown } from "./parser";
 import { DailyPlan, TaskItem, GoalItem } from "@/app/types/planner";
 import { gemini } from "@/app/lib/ai/gemini";
 import { randomUUID } from "crypto";
@@ -245,13 +245,14 @@ export async function generateDailyPlan(
     `docs(daily): automatic daily plan generation for ${targetDate}`
   );
 
-  const scheduledTasks = parseTasks(markdown, filePath);
+  const { dailyFocus, tasks } = parseDailyPlanMarkdown(markdown, filePath);
 
   return {
     date: targetDate,
     weeklyGoals,
     monthlyGoals,
-    tasks: scheduledTasks,
+    tasks,
+    dailyFocus,
     markdown,
   };
 }

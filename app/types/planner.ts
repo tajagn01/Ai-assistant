@@ -25,4 +25,5 @@ export interface DailyPlan {
   monthlyGoals: GoalItem[];
   tasks: TaskItem[];
   markdown: string;
+  dailyFocus?: string[]; // Synthesized daily focus goals for the day
 }
