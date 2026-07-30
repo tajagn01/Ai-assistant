@@ -9,6 +9,15 @@ export const commands = [
   new SlashCommandBuilder()
     .setName("today")
     .setDescription("Generate and retrieve today's daily plan"),
+  new SlashCommandBuilder()
+    .setName("completed")
+    .setDescription("Mark tasks as completed in today's daily log")
+    .addStringOption((option) =>
+      option
+        .setName("task")
+        .setDescription("Specific task name to complete (omit to complete all)")
+        .setRequired(false)
+    ),
 ].map((command) => command.toJSON());
 
 /**

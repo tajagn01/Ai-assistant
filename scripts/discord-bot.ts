@@ -1,7 +1,9 @@
 import { getDiscordClient, discordConfig } from "@/app/lib/discord/client";
 import { registerCommands } from "@/app/lib/discord/commands";
 import { formatPlanEmbed } from "@/app/lib/discord/embeds";
-import { generateDailyPlan } from "@/app/lib/planner/generator";
+import { generateDailyPlan, getLocalDateString } from "@/app/lib/planner/generator";
+import { readFile } from "@/app/lib/github/read";
+import { createOrUpdateFile } from "@/app/lib/github/write";
 import http from "http";
 
 async function main() {
@@ -53,6 +55,75 @@ async function main() {
         const embed = formatPlanEmbed(plan);
 
         await interaction.editReply({ embeds: [embed] });
+      } else if (commandName === "completed") {
+        await interaction.deferReply();
+
+        const targetDate = getLocalDateString();
+        const filePath = `Daily/${targetDate}.md`;
+
+        let fileContent = "";
+        try {
+          fileContent = await readFile(filePath);
+        } catch {
+          await interaction.editReply({
+            content: `❌ No daily log file found for today (${targetDate}) in your vault. Generate it first using \`/today\`!`,
+          });
+          return;
+        }
+
+        const taskQuery = interaction.options.getString("task");
+        const lines = fileContent.split(/\r?\n/);
+        let updatedCount = 0;
+        const completedTasks: string[] = [];
+
+        const updatedLines = lines.map((line) => {
+          // Match uncompleted checkbox pattern: - [ ] Title
+          const match = line.match(/^(\s*[-*+]\s+\[) (\]\s+)(.+)$/);
+          if (match) {
+            const prefix = match[1];
+            const suffix = match[2];
+            const taskTitle = match[3];
+
+            // Filter out comment lines or format details
+            if (taskTitle.startsWith("<!--") || taskTitle.startsWith("Use this section")) {
+              return line;
+            }
+
+            if (taskQuery) {
+              if (taskTitle.toLowerCase().includes(taskQuery.toLowerCase())) {
+                updatedCount++;
+                completedTasks.push(taskTitle);
+                return `${prefix}x${suffix}${taskTitle}`;
+              }
+            } else {
+              updatedCount++;
+              completedTasks.push(taskTitle);
+              return `${prefix}x${suffix}${taskTitle}`;
+            }
+          }
+          return line;
+        });
+
+        if (updatedCount === 0) {
+          await interaction.editReply({
+            content: taskQuery
+              ? `❌ No uncompleted tasks found matching: **"${taskQuery}"**`
+              : `🎉 All tasks in today's daily log are already completed!`,
+          });
+          return;
+        }
+
+        const newContent = updatedLines.join("\n");
+        await createOrUpdateFile(
+          filePath,
+          newContent,
+          `docs(daily): mark tasks as completed via Discord bot`
+        );
+
+        const taskBulletPoints = completedTasks.map((t) => `• ~~${t}~~`).join("\n");
+        await interaction.editReply({
+          content: `✅ Successfully marked ${updatedCount} task(s) as completed for today (**${targetDate}**):\n${taskBulletPoints}`,
+        });
       }
     } catch (err: any) {
       console.error(`Error handling slash command /${commandName}:`, err);

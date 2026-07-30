@@ -171,6 +171,12 @@ export async function generateDailyPlan(
 
   const unfinishedWeeklyGoals = weeklyGoals.filter((g) => !g.completed);
 
+  const dateObj = new Date(targetDate);
+  const dayOfWeek = new Intl.DateTimeFormat("en-US", {
+    weekday: "long",
+    timeZone: "Asia/Kolkata",
+  }).format(dateObj);
+
   // 3. Generate Markdown Daily Plan
   let markdown = "";
   const hasGemini = !!process.env.GEMINI_API_KEY;
@@ -181,6 +187,7 @@ export async function generateDailyPlan(
       console.log("Trying to plan with Gemini API...");
       markdown = await generatePlanWithAI(
         targetDate,
+        dayOfWeek,
         activeBacklogTasks,
         unfinishedWeeklyGoals,
         monthlyGoals
@@ -192,6 +199,7 @@ export async function generateDailyPlan(
           console.log("Falling back to OpenRouter API...");
           markdown = await generatePlanWithOpenRouter(
             targetDate,
+            dayOfWeek,
             activeBacklogTasks,
             unfinishedWeeklyGoals,
             monthlyGoals
@@ -217,6 +225,7 @@ export async function generateDailyPlan(
       console.log("Gemini Key not set. Trying to plan with OpenRouter API...");
       markdown = await generatePlanWithOpenRouter(
         targetDate,
+        dayOfWeek,
         activeBacklogTasks,
         unfinishedWeeklyGoals,
         monthlyGoals
@@ -334,12 +343,15 @@ ${tasksList}
  */
 async function generatePlanWithAI(
   date: string,
+  dayOfWeek: string,
   tasks: TaskItem[],
   weeklyGoals: GoalItem[],
   monthlyGoals: GoalItem[]
 ): Promise<string> {
   const uuid = randomUUID();
-  const prompt = `You are a senior productivity coach and scheduler. Generate today's daily log markdown for date ${date}.
+  const prompt = `You are a senior productivity coach and scheduler. Generate today's daily log markdown for date ${date} (${dayOfWeek}).
+Today is ${dayOfWeek}. The weekly goals must be completed by Sunday. 
+Intelligently divide and distribute the remaining weekly goals and backlog tasks into today's focus and tasks, so that the user makes steady, daily progress and completes everything by the end of the week.
 You MUST generate markdown matching the following template structure EXACTLY. Fill in the specific items inside the comment blocks, but keep all frontmatter, headers, and comments intact:
 
 ---
@@ -437,6 +449,7 @@ Return ONLY the raw markdown content. Do NOT wrap in markdown code blocks (\`\`\
  */
 async function generatePlanWithOpenRouter(
   date: string,
+  dayOfWeek: string,
   tasks: TaskItem[],
   weeklyGoals: GoalItem[],
   monthlyGoals: GoalItem[]
@@ -447,7 +460,9 @@ async function generatePlanWithOpenRouter(
   }
 
   const uuid = randomUUID();
-  const prompt = `You are a senior productivity coach and scheduler. Generate today's daily log markdown for date ${date}.
+  const prompt = `You are a senior productivity coach and scheduler. Generate today's daily log markdown for date ${date} (${dayOfWeek}).
+Today is ${dayOfWeek}. The weekly goals must be completed by Sunday. 
+Intelligently divide and distribute the remaining weekly goals and backlog tasks into today's focus and tasks, so that the user makes steady, daily progress and completes everything by the end of the week.
 You MUST generate markdown matching the following template structure EXACTLY. Fill in the specific items inside the comment blocks, but keep all frontmatter, headers, and comments intact:
 
 ---
