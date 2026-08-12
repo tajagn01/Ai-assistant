@@ -2,6 +2,7 @@ import { getDiscordClient, discordConfig } from "@/app/lib/discord/client";
 import { registerCommands } from "@/app/lib/discord/commands";
 import { formatPlanEmbed } from "@/app/lib/discord/embeds";
 import { generateDailyPlan, getLocalDateString } from "@/app/lib/planner/generator";
+import { parseGoals } from "@/app/lib/planner/parser";
 import { readFile } from "@/app/lib/github/read";
 import { createOrUpdateFile } from "@/app/lib/github/write";
 import { listFolder } from "@/app/lib/github/list";
@@ -55,6 +56,71 @@ async function resolveWeeklyGoalsPath(targetDate: string): Promise<string | null
   } catch {}
 
   return null;
+}
+
+async function updateWeeklyGoalsWithAI(
+  weeklyContent: string,
+  completedTasks: string[]
+): Promise<string> {
+  const hasGemini = !!process.env.GEMINI_API_KEY;
+  const hasOpenRouter = !!process.env.OPENROUTER_API_KEY;
+  
+  const prompt = `You are a weekly goal manager. You are given the content of a weekly goals file and a list of completed daily tasks for today.
+Please update the weekly goals file content by changing "[ ]" to "[x]" for any weekly goals that match or are represented by the completed daily tasks (be smart and match them even if there are slight phrasing differences, spelling errors, or numeric prefixes like "5 leetcode" matching "Practice DSA on Leetcode").
+Keep all other file contents, frontmatter, headers, and uncompleted goals exactly the same. Do NOT add any extra text or code block wrapping. Return ONLY the raw updated markdown file content.
+
+Completed Daily Tasks:
+${completedTasks.map((t) => `- ${t}`).join("\n")}
+
+Original Weekly Goals File:
+${weeklyContent}
+`;
+
+  if (hasGemini) {
+    try {
+      const { gemini } = require("@/app/lib/ai/gemini");
+      const response = await gemini.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: prompt,
+      });
+      let result = response.text?.trim() || weeklyContent;
+      if (result.startsWith("```")) {
+        result = result.replace(/^```[a-zA-Z]*\r?\n/, "").replace(/\r?\n```$/, "").trim();
+      }
+      return result;
+    } catch (e) {
+      console.error("Gemini failed to update weekly goals:", e);
+    }
+  }
+  
+  if (hasOpenRouter) {
+    try {
+      const openRouterKey = process.env.OPENROUTER_API_KEY;
+      const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${openRouterKey}`,
+        },
+        body: JSON.stringify({
+          model: "openrouter/free",
+          messages: [{ role: "user", content: prompt }],
+        }),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        let result = data.choices?.[0]?.message?.content?.trim() || weeklyContent;
+        if (result.startsWith("```")) {
+          result = result.replace(/^```[a-zA-Z]*\r?\n/, "").replace(/\r?\n```$/, "").trim();
+        }
+        return result;
+      }
+    } catch (e) {
+      console.error("OpenRouter failed to update weekly goals:", e);
+    }
+  }
+
+  return weeklyContent;
 }
 
 function startProactiveNudger(client: Client) {
@@ -253,38 +319,27 @@ async function main() {
         if (weeklyPath) {
           try {
             const weeklyContent = await readFile(weeklyPath);
-            const weeklyLines = weeklyContent.split(/\r?\n/);
+            const newWeeklyContent = await updateWeeklyGoalsWithAI(weeklyContent, completedTasks);
             
-            const updatedWeeklyLines = weeklyLines.map((line) => {
-              const match = line.match(/^(\s*[-*+]\s+\[) (\]\s+)(.+)$/);
-              if (match) {
-                const prefix = match[1];
-                const suffix = match[2];
-                const goalTitle = match[3];
-
-                // See if this goal matches any of the completed daily tasks/focuses
-                const wasCompleted = completedTasks.some((task) => {
-                  const tLower = task.toLowerCase();
-                  const gLower = goalTitle.toLowerCase();
-                  return tLower.includes(gLower) || gLower.includes(tLower);
-                });
-
-                if (wasCompleted) {
+            if (newWeeklyContent !== weeklyContent) {
+              const originalGoals = parseGoals(weeklyContent, "weekly");
+              const updatedGoals = parseGoals(newWeeklyContent, "weekly");
+              
+              updatedGoals.forEach((ug) => {
+                const og = originalGoals.find((g) => g.title === ug.title);
+                if (ug.completed && og && !og.completed) {
                   weeklyGoalsUpdated++;
-                  completedWeeklyGoals.push(goalTitle);
-                  return `${prefix}x${suffix}${goalTitle}`;
+                  completedWeeklyGoals.push(ug.title);
                 }
-              }
-              return line;
-            });
+              });
 
-            if (weeklyGoalsUpdated > 0) {
-              const newWeeklyContent = updatedWeeklyLines.join("\n");
-              await createOrUpdateFile(
-                weeklyPath,
-                newWeeklyContent,
-                `docs(weekly): update goals completed via Discord bot`
-              );
+              if (weeklyGoalsUpdated > 0) {
+                await createOrUpdateFile(
+                  weeklyPath,
+                  newWeeklyContent,
+                  `docs(weekly): update goals completed via Discord bot`
+                );
+              }
             }
           } catch (weeklyErr) {
             console.error("Failed to update weekly goals:", weeklyErr);
