@@ -4,6 +4,7 @@ import { formatPlanEmbed } from "@/app/lib/discord/embeds";
 import { generateDailyPlan, getLocalDateString } from "@/app/lib/planner/generator";
 import { readFile } from "@/app/lib/github/read";
 import { createOrUpdateFile } from "@/app/lib/github/write";
+import { listFolder } from "@/app/lib/github/list";
 import { Client, TextChannel } from "discord.js";
 import http from "http";
 
@@ -19,6 +20,41 @@ const nudgeMessages = [
 
 function getRandomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+async function resolveWeeklyGoalsPath(targetDate: string): Promise<string | null> {
+  const dateObj = new Date(targetDate);
+  const startOfYear = new Date(dateObj.getFullYear(), 0, 1);
+  const pastDaysOfYear = (dateObj.getTime() - startOfYear.getTime()) / 86400000;
+  const weekNum = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+  const year = dateObj.getFullYear();
+  const formattedWeekNum = String(weekNum).padStart(2, "0");
+
+  const pathsToCheck = [
+    `Goals/Weekly/${year}-W${formattedWeekNum}.md`,
+    `Goals/Weekly/${year}-Www.md`,
+    `Goals/Weekly.md`
+  ];
+
+  for (const p of pathsToCheck) {
+    try {
+      await readFile(p);
+      return p;
+    } catch {}
+  }
+
+  // Fallback: list folder
+  try {
+    const folderFiles = await listFolder("Goals/Weekly");
+    if (Array.isArray(folderFiles) && folderFiles.length > 0) {
+      const mdFile = folderFiles.find(
+        (f: any) => f.type === "file" && f.name.endsWith(".md")
+      );
+      if (mdFile) return mdFile.path;
+    }
+  } catch {}
+
+  return null;
 }
 
 function startProactiveNudger(client: Client) {
@@ -201,6 +237,7 @@ async function main() {
           return;
         }
 
+        // Save Daily Log changes
         const newContent = updatedLines.join("\n");
         await createOrUpdateFile(
           filePath,
@@ -208,9 +245,63 @@ async function main() {
           `docs(daily): mark tasks as completed via Discord bot`
         );
 
-        const taskBulletPoints = completedTasks.map((t) => `• ~~${t}~~`).join("\n");
+        // Also check and update the corresponding Weekly Goals file!
+        const weeklyPath = await resolveWeeklyGoalsPath(targetDate);
+        let weeklyGoalsUpdated = 0;
+        const completedWeeklyGoals: string[] = [];
+
+        if (weeklyPath) {
+          try {
+            const weeklyContent = await readFile(weeklyPath);
+            const weeklyLines = weeklyContent.split(/\r?\n/);
+            
+            const updatedWeeklyLines = weeklyLines.map((line) => {
+              const match = line.match(/^(\s*[-*+]\s+\[) (\]\s+)(.+)$/);
+              if (match) {
+                const prefix = match[1];
+                const suffix = match[2];
+                const goalTitle = match[3];
+
+                // See if this goal matches any of the completed daily tasks/focuses
+                const wasCompleted = completedTasks.some((task) => {
+                  const tLower = task.toLowerCase();
+                  const gLower = goalTitle.toLowerCase();
+                  return tLower.includes(gLower) || gLower.includes(tLower);
+                });
+
+                if (wasCompleted) {
+                  weeklyGoalsUpdated++;
+                  completedWeeklyGoals.push(goalTitle);
+                  return `${prefix}x${suffix}${goalTitle}`;
+                }
+              }
+              return line;
+            });
+
+            if (weeklyGoalsUpdated > 0) {
+              const newWeeklyContent = updatedWeeklyLines.join("\n");
+              await createOrUpdateFile(
+                weeklyPath,
+                newWeeklyContent,
+                `docs(weekly): update goals completed via Discord bot`
+              );
+            }
+          } catch (weeklyErr) {
+            console.error("Failed to update weekly goals:", weeklyErr);
+          }
+        }
+
+        // Format nice success response
+        let replyMessage = `✅ Successfully marked ${updatedCount} task(s) as completed for today (**${targetDate}**):\n`;
+        replyMessage += completedTasks.map((t) => `• ~~${t}~~`).join("\n");
+        
+        if (weeklyGoalsUpdated > 0) {
+          replyMessage += `\n\n🎯 **Also updated ${weeklyGoalsUpdated} Weekly Goal(s) in your vault:**\n`;
+          replyMessage += completedWeeklyGoals.map((g) => `• ~~${g}~~`).join("\n");
+        }
+
         await interaction.editReply({
-          content: `✅ Successfully marked ${updatedCount} task(s) as completed for today (**${targetDate}**):\n${taskBulletPoints}`,
+          content: replyMessage,
         });
       }
     } catch (err: any) {
