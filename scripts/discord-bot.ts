@@ -4,7 +4,94 @@ import { formatPlanEmbed } from "@/app/lib/discord/embeds";
 import { generateDailyPlan, getLocalDateString } from "@/app/lib/planner/generator";
 import { readFile } from "@/app/lib/github/read";
 import { createOrUpdateFile } from "@/app/lib/github/write";
+import { Client, TextChannel } from "discord.js";
 import http from "http";
+
+const nudgeMessages = [
+  "Hey! How's your progress going today? Did you get a chance to work on your goals? 🚀",
+  "Quick check-in! What task are you working on right now? 📝",
+  "Just wanted to nudge you—how is today's task list coming along? You got this! 💪",
+  "Hey there! Any updates on your daily focus/tasks? Let me know how it's going! ✨",
+  "Quick progress check! Which tasks have you knocked off the list so far? 🎯",
+  "Friendly reminder to log your progress! How's everything tracking? 📈",
+  "Hey! Hope you're having a productive day. What's the latest update on your goals? 🌟"
+];
+
+function getRandomInt(min: number, max: number): number {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function startProactiveNudger(client: Client) {
+  const channelId = process.env.DISCORD_CHANNEL_ID;
+  if (!channelId) {
+    console.warn("[Nudger] DISCORD_CHANNEL_ID not configured. Proactive nudging disabled.");
+    return;
+  }
+
+  let lastNudgeDate: string = "";
+  let nudgeSlotsSent: number[] = [];
+  let targetHour1 = getRandomInt(13, 16); // 1:00 PM - 4:59 PM IST
+  let targetHour2 = getRandomInt(17, 21); // 5:00 PM - 9:59 PM IST
+
+  console.log(`[Nudger] Initialized. Today's target slots: ${targetHour1} and ${targetHour2}`);
+
+  // Run check every 15 minutes
+  setInterval(async () => {
+    try {
+      const now = new Date();
+      const dateParts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Kolkata",
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "numeric",
+        hour12: false
+      }).formatToParts(now);
+
+      const year = dateParts.find((p) => p.type === "year")?.value;
+      const month = dateParts.find((p) => p.type === "month")?.value;
+      const day = dateParts.find((p) => p.type === "day")?.value;
+      const hourStr = dateParts.find((p) => p.type === "hour")?.value;
+
+      if (!year || !month || !day || !hourStr) return;
+
+      const todayStr = `${year}-${month}-${day}`;
+      const currentHour = parseInt(hourStr, 10);
+
+      // Reset slots if day changed
+      if (todayStr !== lastNudgeDate) {
+        lastNudgeDate = todayStr;
+        nudgeSlotsSent = [];
+        targetHour1 = getRandomInt(13, 16);
+        targetHour2 = getRandomInt(17, 21);
+        console.log(`[Nudger] New day (${todayStr}) reset. Target hours for today: ${targetHour1} and ${targetHour2}`);
+      }
+
+      let shouldSend = false;
+      let slotId = 0;
+
+      if (currentHour === targetHour1 && !nudgeSlotsSent.includes(1)) {
+        shouldSend = true;
+        slotId = 1;
+      } else if (currentHour === targetHour2 && !nudgeSlotsSent.includes(2)) {
+        shouldSend = true;
+        slotId = 2;
+      }
+
+      if (shouldSend) {
+        nudgeSlotsSent.push(slotId);
+        const randomMessage = nudgeMessages[Math.floor(Math.random() * nudgeMessages.length)];
+        const channel = await client.channels.fetch(channelId);
+        if (channel && channel.isTextBased()) {
+          console.log(`[Nudger] Sending nudge: "${randomMessage}"`);
+          await (channel as TextChannel).send(randomMessage);
+        }
+      }
+    } catch (err) {
+      console.error("[Nudger] Error running check loop:", err);
+    }
+  }, 15 * 60 * 1000);
+}
 
 async function main() {
   const { token } = discordConfig;
@@ -36,6 +123,7 @@ async function main() {
 
   client.on("ready", () => {
     console.log(`🚀 Discord Bot is online and logged in as ${client.user?.tag}`);
+    startProactiveNudger(client);
   });
 
   client.on("interactionCreate", async (interaction) => {
