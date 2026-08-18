@@ -18,6 +18,36 @@ export const commands = [
         .setDescription("Specific task name to complete (omit to complete all)")
         .setRequired(false)
     ),
+  new SlashCommandBuilder()
+    .setName("weekly-goal")
+    .setDescription("Add a new weekly goal to your Obsidian vault")
+    .addStringOption((option) =>
+      option
+        .setName("goal")
+        .setDescription("The weekly goal description to add")
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("week")
+        .setDescription("Target week (e.g. 2026-W34). Defaults to current week")
+        .setRequired(false)
+    ),
+  new SlashCommandBuilder()
+    .setName("monthly-goal")
+    .setDescription("Add a new monthly goal to your Obsidian vault")
+    .addStringOption((option) =>
+      option
+        .setName("goal")
+        .setDescription("The monthly goal description to add")
+        .setRequired(true)
+    )
+    .addStringOption((option) =>
+      option
+        .setName("month")
+        .setDescription("Target month (e.g. 2026-08). Defaults to current month")
+        .setRequired(false)
+    ),
 ].map((command) => command.toJSON());
 
 /**

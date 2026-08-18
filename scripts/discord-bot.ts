@@ -8,6 +8,7 @@ import { createOrUpdateFile } from "@/app/lib/github/write";
 import { listFolder } from "@/app/lib/github/list";
 import { Client, TextChannel } from "discord.js";
 import http from "http";
+import { randomUUID } from "crypto";
 
 const nudgeMessages = [
   "Hey! How's your progress going today? Did you get a chance to work on your goals? 🚀",
@@ -358,6 +359,111 @@ async function main() {
         await interaction.editReply({
           content: replyMessage,
         });
+      } else if (commandName === "weekly-goal") {
+        await interaction.deferReply();
+        const goalText = interaction.options.getString("goal", true);
+        let week = interaction.options.getString("week");
+
+        const now = new Date();
+
+        if (!week) {
+          week = getWeekString(now);
+        }
+
+        const filePath = `Goals/Weekly/${week}.md`;
+        let fileContent = "";
+        let isNewFile = false;
+
+        try {
+          fileContent = await readFile(filePath);
+        } catch {
+          isNewFile = true;
+          try {
+            const templateContent = await readFile("Templates/Weekly Template.md");
+            
+            // Format Sunday for the weekly target end-date
+            const dayOfWeek = now.getDay();
+            const daysToAdd = 7 - dayOfWeek;
+            const weekEndObj = new Date(now.getTime() + (daysToAdd * 24 * 60 * 60 * 1000));
+            const weekEndStr = getLocalDateString(weekEndObj);
+            
+            const uuid = randomUUID();
+            const todayStr = getLocalDateString(now);
+            const timeStr = now.toTimeString().split(" ")[0];
+
+            fileContent = templateContent
+              .replace(/\{\{uuid\}\}/g, uuid)
+              .replace(/\{\{week\}\}/g, week)
+              .replace(/\{\{week-end\}\}/g, weekEndStr)
+              .replace(/\{\{date\}\}/g, todayStr)
+              .replace(/\{\{time\}\}/g, timeStr);
+          } catch (templateErr) {
+            console.error("Failed to read weekly template:", templateErr);
+            fileContent = `---\nid: "${randomUUID()}"\ntype: weekly\nweek: "${week}"\nstatus: active\ntags: [weekly-review]\nai_processed: false\n---\n\n# Weekly Goals: ${week}\n\n## 🎯 High-Level Objectives\n`;
+          }
+        }
+
+        const updatedContent = insertGoalIntoMarkdown(fileContent, goalText, "## 🎯 High-Level Objectives");
+
+        await createOrUpdateFile(
+          filePath,
+          updatedContent,
+          `docs(weekly): ${isNewFile ? "initialize and " : ""}add goal via Discord bot`
+        );
+
+        await interaction.editReply({
+          content: `🎯 Successfully added weekly goal to **${week}**:\n- [ ] ${goalText}${isNewFile ? " *(Created new weekly goal file)*" : ""}`
+        });
+      } else if (commandName === "monthly-goal") {
+        await interaction.deferReply();
+        const goalText = interaction.options.getString("goal", true);
+        let month = interaction.options.getString("month");
+
+        const now = new Date();
+
+        if (!month) {
+          const year = now.getFullYear();
+          const formattedMonth = String(now.getMonth() + 1).padStart(2, "0");
+          month = `${year}-${formattedMonth}`;
+        }
+
+        const filePath = `Goals/Monthly/${month}.md`;
+        let fileContent = "";
+        let isNewFile = false;
+
+        try {
+          fileContent = await readFile(filePath);
+        } catch {
+          isNewFile = true;
+          try {
+            const templateContent = await readFile("Templates/Monthly Template.md");
+            
+            const uuid = randomUUID();
+            const todayStr = getLocalDateString(now);
+            const timeStr = now.toTimeString().split(" ")[0];
+
+            fileContent = templateContent
+              .replace(/\{\{uuid\}\}/g, uuid)
+              .replace(/\{\{month\}\}/g, month)
+              .replace(/\{\{date\}\}/g, todayStr)
+              .replace(/\{\{time\}\}/g, timeStr);
+          } catch (templateErr) {
+            console.error("Failed to read monthly template:", templateErr);
+            fileContent = `---\nid: "${randomUUID()}"\ntype: monthly\nmonth: "${month}"\nstatus: active\ntags: [monthly-review]\nai_processed: false\n---\n\n# Monthly Goals: ${month}\n\n## 🧭 Strategic Themes\n`;
+          }
+        }
+
+        const updatedContent = insertGoalIntoMarkdown(fileContent, goalText, "## 🧭 Strategic Themes");
+
+        await createOrUpdateFile(
+          filePath,
+          updatedContent,
+          `docs(monthly): ${isNewFile ? "initialize and " : ""}add goal via Discord bot`
+        );
+
+        await interaction.editReply({
+          content: `🧭 Successfully added monthly goal to **${month}**:\n- [ ] ${goalText}${isNewFile ? " *(Created new monthly goal file)*" : ""}`
+        });
       }
     } catch (err: any) {
       console.error(`Error handling slash command /${commandName}:`, err);
@@ -383,3 +489,100 @@ main().catch((err) => {
   console.error("Fatal error starting Discord bot daemon:", err);
   process.exit(1);
 });
+
+function getWeekString(dateObj: Date): string {
+  const startOfYear = new Date(dateObj.getFullYear(), 0, 1);
+  const pastDaysOfYear = (dateObj.getTime() - startOfYear.getTime()) / 86400000;
+  const weekNum = Math.ceil((pastDaysOfYear + startOfYear.getDay() + 1) / 7);
+  const year = dateObj.getFullYear();
+  const formattedWeekNum = String(weekNum).padStart(2, "0");
+  return `${year}-W${formattedWeekNum}`;
+}
+
+function insertGoalIntoMarkdown(
+  content: string,
+  goalText: string,
+  targetHeader: string
+): string {
+  const lines = content.split(/\r?\n/);
+  let headerIndex = -1;
+
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim().includes(targetHeader)) {
+      headerIndex = i;
+      break;
+    }
+  }
+
+  if (headerIndex === -1) {
+    return content + `\n\n${targetHeader}\n- [ ] ${goalText}`;
+  }
+
+  let insertIndex = headerIndex + 1;
+  let lastListItemIndex = -1;
+
+  for (let i = headerIndex + 1; i < lines.length; i++) {
+    const line = lines[i].trim();
+    if (line.startsWith("#")) {
+      break;
+    }
+    if (line.startsWith("- [ ]") || line.startsWith("- [x]") || line.startsWith("- ")) {
+      lastListItemIndex = i;
+    }
+  }
+
+  if (lastListItemIndex !== -1) {
+    insertIndex = lastListItemIndex + 1;
+  } else {
+    while (insertIndex < lines.length && lines[insertIndex].trim() === "") {
+      insertIndex++;
+    }
+  }
+
+  if (lastListItemIndex !== -1) {
+    const listLines = lines.slice(headerIndex + 1, lastListItemIndex + 1);
+    const hasOnlyPlaceholders = listLines.every((l) => {
+      const trimmed = l.trim();
+      return (
+        trimmed === "" ||
+        trimmed.startsWith("<!--") ||
+        trimmed.endsWith("-->") ||
+        trimmed === "- [ ] Objective 1" ||
+        trimmed === "- [ ] Objective 2" ||
+        trimmed === "- [ ] Theme 1" ||
+        trimmed === "- [ ] Theme 2" ||
+        trimmed === "- [ ] Metric 1"
+      );
+    });
+
+    if (hasOnlyPlaceholders) {
+      const cleanLines: string[] = [];
+      for (let i = 0; i < lines.length; i++) {
+        if (i > headerIndex && i <= lastListItemIndex) {
+          const l = lines[i].trim();
+          if (
+            l === "- [ ] Objective 1" ||
+            l === "- [ ] Objective 2" ||
+            l === "- [ ] Theme 1" ||
+            l === "- [ ] Theme 2" ||
+            l === "- [ ] Metric 1"
+          ) {
+            continue;
+          }
+        }
+        cleanLines.push(lines[i]);
+      }
+      
+      const newHeaderIndex = cleanLines.findIndex((l) =>
+        l.trim().includes(targetHeader)
+      );
+      if (newHeaderIndex !== -1) {
+        cleanLines.splice(newHeaderIndex + 1, 0, `- [ ] ${goalText}`);
+        return cleanLines.join("\n");
+      }
+    }
+  }
+
+  lines.splice(insertIndex, 0, `- [ ] ${goalText}`);
+  return lines.join("\n");
+}
